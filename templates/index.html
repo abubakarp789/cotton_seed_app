@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cotton Seed Species Predictor</title>
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+<nav class="navbar navbar-expand-lg mb-4">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="#">Cotton Seed Species Predictor</a>
+    <button id="darkModeToggle" class="btn btn-sm ms-auto" style="background:#e6e2d3; color:#3e3e29;">🌙</button>
+    <button class="btn btn-sm ms-2" style="background:#a3c585; color:#23291e;" data-bs-toggle="modal" data-bs-target="#modelInfoModal">Model Info</button>
+  </div>
+</nav>
+<div class="container py-3">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <!-- Upload Card -->
+            <div class="card p-4 mb-4">
+                <h2 class="mb-2">Upload or Capture Cotton Seed Images</h2>
+                <p class="mb-3" style="font-size:1.05rem;">This tool predicts the species of a cotton seed from image(s) using a deep learning model. Upload or capture one or more photos to get started.</p>
+                {% with messages = get_flashed_messages() %}
+                  {% if messages %}
+                    <div class="alert alert-warning" role="alert">
+                      {{ messages[0] }}
+                    </div>
+                  {% endif %}
+                {% endwith %}
+                <form id="upload-form" method="post" enctype="multipart/form-data">
+                    <div id="drag-drop-area" class="drag-drop-area mb-3">
+                        <span id="drag-drop-text">Drag & Drop images here or click to select (multiple allowed)</span>
+                        <input id="file-input" class="form-control d-none" type="file" name="file" accept="image/*" capture="environment" multiple required>
+                    </div>
+                    <div id="preview-area" class="mb-3 row" style="display:none;"></div>
+                    <div class="d-flex flex-wrap gap-2">
+                        <button id="predict-btn" class="btn btn-primary flex-fill" type="submit">
+                            <span id="predict-btn-text">Predict</span>
+                            <span id="loading-spinner" class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                        </button>
+                        <button id="reset-btn" class="btn btn-secondary flex-fill" type="button">Clear/Reset</button>
+                        {% if predictions %}
+                        <a href="{{ url_for('download_csv') }}" class="btn btn-success flex-fill">Download CSV</a>
+                        {% endif %}
+                    </div>
+                </form>
+            </div>
+            <!-- Prediction Results -->
+            {% if predictions %}
+            <div class="card p-4 mb-4 bar-chart-card">
+                <h4 class="mb-3">Prediction Probabilities</h4>
+                <div class="row row-cols-1 row-cols-md-2 g-4">
+                {% for pred in predictions %}
+                  <div class="col">
+                    <div class="card mb-3 p-2">
+                        <div class="d-flex align-items-center mb-2">
+                            <img src="{{ url_for('uploaded_file', filename=pred.filename) }}" class="img-fluid rounded me-3" style="max-width:80px; max-height:80px;">
+                            <span class="fw-bold">{{ pred.filename }}</span>
+                        </div>
+                        <canvas id="bar-{{ loop.index0 }}" height="100"></canvas>
+                        <table class="table table-bordered table-hover mt-2 mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Species</th>
+                                    <th>Confidence (%)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for name in class_names %}
+                                <tr>
+                                    <td>{{ name }}</td>
+                                    <td>{{ '%.2f' % (pred.confidences[name]*100) }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                  </div>
+                {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            <!-- Prediction History -->
+            {% if history %}
+            <div class="card p-4 mb-4">
+                <h5 class="mb-3">Prediction History (this session)</h5>
+                <div class="table-responsive">
+                <table class="table table-bordered table-hover">
+                    <thead>
+                        <tr>
+                            <th>Image</th>
+                            {% for name in class_names %}<th>{{ name }}</th>{% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pred in history %}
+                        <tr>
+                            <td>{{ pred.filename }}</td>
+                            {% for name in class_names %}
+                            <td>{{ '%.2f' % (pred.confidences[name]*100) }}</td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+<!-- Model Info Modal -->
+<div class="modal fade" id="modelInfoModal" tabindex="-1" aria-labelledby="modelInfoModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modelInfoModalLabel">Model Info</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="model-info-body">
+        <div class="text-center"><div class="spinner-border" role="status"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+
+<!-- jinja2:start -->
+{% if predictions %}
+<script>
+const chartData = JSON.parse('{{ predictions|tojson|safe }}');
+const classNames = JSON.parse('{{ class_names|tojson|safe }}');
+chartData.forEach(function(pred, idx) {
+    const ctx = document.getElementById('bar-' + idx).getContext('2d');
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: classNames,
+            datasets: [{
+                label: 'Confidence (%)',
+                data: classNames.map(name => pred.confidences[name] * 100),
+                backgroundColor: [
+                    '#7bb661', '#a3c585', '#e6e2d3', '#b7a16a', '#f6f8f3', '#c2b280', '#b6d7a8'
+                ],
+                borderRadius: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false },
+                title: { display: false }
+            },
+            scales: {
+                y: { beginAtZero: true, max: 100 }
+            }
+        }
+    });
+});
+</script>
+{% endif %}
+<!-- jinja2:end -->
+</body>
+</html> 
