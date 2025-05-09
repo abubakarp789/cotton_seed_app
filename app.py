@@ -154,5 +154,3 @@ def model_info():
 @app.route('/static/uploads/<filename>')
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
-
-# Removed app.run(debug=True) for Azure deployment; use gunicorn instead. 
