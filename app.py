@@ -155,5 +155,4 @@ def model_info():
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
-if __name__ == '__main__':
-    app.run(debug=True) 
+# Removed app.run(debug=True) for Azure deployment; use gunicorn instead. 
